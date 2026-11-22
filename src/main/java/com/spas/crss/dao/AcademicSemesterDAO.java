@@ -147,4 +147,37 @@ public class AcademicSemesterDAO {
             return false;
         }
     }
+
+    // 6. GET ACTIVE SEMESTER
+    public AcademicSemester getActiveSemester() {
+
+        String sql = "SELECT * FROM academic_semester "
+                + "WHERE LOWER(semester_status) = 'active' "
+                + "LIMIT 1";
+
+        try (Connection conn = DatabaseConnection.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql);
+             ResultSet rs = pstmt.executeQuery()) {
+
+            if (rs.next()) {
+
+                AcademicSemester semester = new AcademicSemester();
+
+                semester.setSemesterId(rs.getInt("semester_id"));
+                semester.setAcademicYear(rs.getString("academic_year"));
+                semester.setSemesterName(rs.getString("semester_name"));
+                semester.setStartDate(rs.getDate("start_date"));
+                semester.setEndDate(rs.getDate("end_date"));
+                semester.setSemesterStatus(rs.getString("semester_status"));
+
+                return semester;
+            }
+
+        } catch (SQLException e) {
+            System.out.println("Error retrieving active semester: "
+                    + e.getMessage());
+        }
+
+        return null;
+    }
 }
