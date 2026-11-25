@@ -1,3 +1,4 @@
+
 package com.spas.crss.dao;
 
 import com.spas.crss.config.DatabaseConnection;
@@ -8,10 +9,15 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.List;
 
 public class UserAccountDAO {
 
-    // Create a new user account
+    // =====================================================
+    // 1. CREATE A NORMAL USER ACCOUNT
+    // =====================================================
+
     public boolean createAccount(UserAccount account) {
 
         String sql = """
@@ -22,8 +28,8 @@ public class UserAccountDAO {
                 """;
 
         try (Connection connection = DatabaseConnection.getConnection();
-             PreparedStatement statement =
-                     connection.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+             PreparedStatement statement = connection.prepareStatement(
+                     sql, Statement.RETURN_GENERATED_KEYS)) {
 
             statement.setString(1, account.getUsername());
             statement.setString(2, account.getPasswordHash());
@@ -53,11 +59,164 @@ public class UserAccountDAO {
         return false;
     }
 
-    // Find account using username
+
+    // =====================================================
+    // 2. CREATE THE FIRST SYSTEM ADMINISTRATOR
+    // =====================================================
+
+    public boolean createInitialSystemAdmin(UserAccount account) {
+
+        if (account == null) {
+            throw new IllegalArgumentException(
+                    "System Admin account cannot be null."
+            );
+        }
+
+        if (!"SYSTEM_ADMIN".equalsIgnoreCase(account.getRole())) {
+            throw new IllegalArgumentException(
+                    "Only SYSTEM_ADMIN accounts can use this method."
+            );
+        }
+
+        if (account.getStudentId() != null
+                || account.getLecturerId() != null
+                || account.getCodId() != null) {
+
+            throw new IllegalArgumentException(
+                    "System Admin accounts must not be linked "
+                    + "to academic profiles."
+            );
+        }
+
+        final String lockName = "spas_crss_initial_admin";
+
+        String countSql = """
+                SELECT COUNT(*)
+                FROM user_account
+                WHERE role = 'SYSTEM_ADMIN'
+                """;
+
+        String insertSql = """
+                INSERT INTO user_account
+                (username, password_hash, role, account_status,
+                 student_id, lecturer_id, cod_id)
+                VALUES (?, ?, 'SYSTEM_ADMIN', 'ACTIVE', NULL, NULL, NULL)
+                """;
+
+        try (Connection connection = DatabaseConnection.getConnection()) {
+
+            try (PreparedStatement lockStatement =
+                         connection.prepareStatement("SELECT GET_LOCK(?, 10)")) {
+
+                lockStatement.setString(1, lockName);
+
+                try (ResultSet result = lockStatement.executeQuery()) {
+
+                    if (!result.next() || result.getInt(1) != 1) {
+                        throw new IllegalStateException(
+                                "Could not acquire System Admin provisioning lock."
+                        );
+                    }
+                }
+            }
+
+            try {
+
+                connection.setAutoCommit(false);
+
+                try (PreparedStatement countStatement =
+                             connection.prepareStatement(countSql);
+                     ResultSet result = countStatement.executeQuery()) {
+
+                    if (result.next() && result.getInt(1) > 0) {
+                        connection.rollback();
+
+                        System.out.println(
+                                "A System Admin account already exists."
+                        );
+
+                        return false;
+                    }
+                }
+
+                try (PreparedStatement insertStatement =
+                             connection.prepareStatement(
+                                     insertSql,
+                                     Statement.RETURN_GENERATED_KEYS)) {
+
+                    insertStatement.setString(1, account.getUsername());
+                    insertStatement.setString(2, account.getPasswordHash());
+
+                    int rowsInserted = insertStatement.executeUpdate();
+
+                    if (rowsInserted > 0) {
+
+                        try (ResultSet keys =
+                                     insertStatement.getGeneratedKeys()) {
+
+                            if (keys.next()) {
+                                account.setAccountId(keys.getInt(1));
+                            }
+                        }
+
+                        connection.commit();
+
+                        System.out.println(
+                                "Initial System Admin created successfully."
+                        );
+
+                        return true;
+                    }
+                }
+
+                connection.rollback();
+                return false;
+
+            } catch (SQLException | RuntimeException e) {
+
+                connection.rollback();
+
+                throw new IllegalStateException(
+                        "System Admin provisioning failed: " + e.getMessage(),
+                        e
+                );
+
+            } finally {
+
+                connection.setAutoCommit(true);
+
+                try (PreparedStatement releaseStatement =
+                             connection.prepareStatement(
+                                     "SELECT RELEASE_LOCK(?)")) {
+
+                    releaseStatement.setString(1, lockName);
+
+                    try (ResultSet ignored = releaseStatement.executeQuery()) {
+                        // Lock release confirmed by database execution.
+                    }
+                }
+            }
+
+        } catch (SQLException e) {
+
+            throw new IllegalStateException(
+                    "Database error during System Admin provisioning: "
+                    + e.getMessage(),
+                    e
+            );
+        }
+    }
+
+
+    // =====================================================
+    // 3. FIND ACCOUNT BY USERNAME
+    // =====================================================
+
     public UserAccount getAccountByUsername(String username) {
 
         String sql = """
-                SELECT * FROM user_account
+                SELECT *
+                FROM user_account
                 WHERE username = ?
                 """;
 
@@ -80,11 +239,16 @@ public class UserAccountDAO {
         return null;
     }
 
-    // Find account using account ID
+
+    // =====================================================
+    // 4. FIND ACCOUNT BY ID
+    // =====================================================
+
     public UserAccount getAccountById(int accountId) {
 
         String sql = """
-                SELECT * FROM user_account
+                SELECT *
+                FROM user_account
                 WHERE account_id = ?
                 """;
 
@@ -107,7 +271,11 @@ public class UserAccountDAO {
         return null;
     }
 
-    // Activate or deactivate an account
+
+    // =====================================================
+    // 5. UPDATE ACCOUNT STATUS
+    // =====================================================
+
     public boolean updateAccountStatus(int accountId, String status) {
 
         String sql = """
@@ -131,7 +299,45 @@ public class UserAccountDAO {
         return false;
     }
 
-    // Convert database record into UserAccount object
+
+    // =====================================================
+    // 6. GET ALL USER ACCOUNTS
+    // =====================================================
+
+    public List<UserAccount> getAllAccounts() {
+
+        List<UserAccount> accounts = new ArrayList<>();
+
+        String sql = """
+                SELECT *
+                FROM user_account
+                ORDER BY account_id ASC
+                """;
+
+        try (Connection connection = DatabaseConnection.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql);
+             ResultSet result = statement.executeQuery()) {
+
+            while (result.next()) {
+                accounts.add(extractAccount(result));
+            }
+
+        } catch (SQLException e) {
+
+            throw new IllegalStateException(
+                    "Failed to retrieve user accounts: " + e.getMessage(),
+                    e
+            );
+        }
+
+        return accounts;
+    }
+
+
+    // =====================================================
+    // 7. EXTRACT ACCOUNT FROM DATABASE RESULT
+    // =====================================================
+
     private UserAccount extractAccount(ResultSet result)
             throws SQLException {
 
@@ -142,6 +348,7 @@ public class UserAccountDAO {
         account.setPasswordHash(result.getString("password_hash"));
         account.setRole(result.getString("role"));
         account.setAccountStatus(result.getString("account_status"));
+
         account.setStudentId(result.getString("student_id"));
         account.setLecturerId(result.getString("lecturer_id"));
         account.setCodId(result.getString("cod_id"));

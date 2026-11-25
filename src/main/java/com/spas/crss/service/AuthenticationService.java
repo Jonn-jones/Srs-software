@@ -38,6 +38,15 @@ public class AuthenticationService {
             return false;
         }
 
+        // Prevent public System Admin registration
+        if (role == UserRole.SYSTEM_ADMIN) {
+            System.out.println(
+                    "System Admin accounts must be created through "
+                    + "the secure provisioning process."
+            );
+            return false;
+        }
+
         // Validate linked record ID
         if (linkedId == null || linkedId.trim().isEmpty()) {
             System.out.println("A linked user ID is required.");
@@ -71,6 +80,10 @@ public class AuthenticationService {
             case COD:
                 codId = linkedId.trim();
                 break;
+
+            case SYSTEM_ADMIN:
+                // Already blocked above.
+                return false;
         }
 
         UserAccount account = new UserAccount(
@@ -104,7 +117,6 @@ public class AuthenticationService {
             return null;
         }
 
-        // Retrieve account
         UserAccount account =
                 userAccountDAO.getAccountByUsername(username.trim());
 
@@ -113,13 +125,11 @@ public class AuthenticationService {
             return null;
         }
 
-        // Check account status
         if (!"ACTIVE".equalsIgnoreCase(account.getAccountStatus())) {
             System.out.println("Your account is inactive.");
             return null;
         }
 
-        // Verify password
         boolean passwordCorrect = PasswordUtil.verifyPassword(
                 password,
                 account.getPasswordHash()
@@ -130,7 +140,6 @@ public class AuthenticationService {
             return null;
         }
 
-        // Validate stored role
         try {
             UserRole.valueOf(account.getRole().toUpperCase());
 
@@ -143,7 +152,7 @@ public class AuthenticationService {
         System.out.println("Welcome, " + account.getUsername());
         System.out.println("Role: " + account.getRole());
 
-        // Never expose the stored password hash to the caller
+        // Never expose the stored password hash
         account.setPasswordHash(null);
 
         return account;
