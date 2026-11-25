@@ -19,6 +19,15 @@ public class DatabaseConnection {
             System.getenv().getOrDefault("DB_PASSWORD", "");
 
     public static Connection getConnection() throws SQLException {
+        try {
+            Class.forName("org.mariadb.jdbc.Driver");
+        } catch (ClassNotFoundException e) {
+            throw new SQLException(
+                    "MariaDB JDBC driver is not available on the runtime classpath.",
+                    e
+            );
+        }
+
         return DriverManager.getConnection(URL, USER, PASSWORD);
     }
 
@@ -29,18 +38,15 @@ public class DatabaseConnection {
             System.out.println("SPAS CRSS DATABASE CONNECTION");
             System.out.println("=================================");
             System.out.println("Connection successful!");
-
-            System.out.println("Database: "
-                    + connection.getCatalog());
-
+            System.out.println("Database: " + connection.getCatalog());
             System.out.println("Database version: "
                     + connection.getMetaData().getDatabaseProductVersion());
-
             System.out.println("=================================");
 
         } catch (SQLException e) {
             System.out.println("Database connection failed!");
             System.out.println("Reason: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 }
