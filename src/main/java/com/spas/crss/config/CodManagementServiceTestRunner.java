@@ -12,7 +12,7 @@ public class CodManagementServiceTestRunner {
         CodManagementService service = new CodManagementService();
         UserAccountDAO accountDAO = new UserAccountDAO();
 
-        UserAccount codUser = accountDAO.getAccountByUsername("Dismus");
+        UserAccount adminUser = accountDAO.getAccountByUsername("AdminSpas");
         UserAccount studentUser = accountDAO.getAccountByUsername("Pixelpp");
 
         String testId = "TEST" + System.currentTimeMillis();
@@ -29,7 +29,7 @@ public class CodManagementServiceTestRunner {
         // 1. Add CoD
         try {
             boolean result = service.addCod(
-                    codUser,
+                    adminUser,
                     new Cod(testId, "Service Test Coordinator", testEmail)
             );
 
@@ -47,7 +47,7 @@ public class CodManagementServiceTestRunner {
 
         // 2. Retrieve CoD
         try {
-            Cod result = service.getCodById(codUser, testId);
+            Cod result = service.getCodById(adminUser, testId);
 
             if (result != null) {
                 System.out.println("RETRIEVE CoD: PASSED");
@@ -64,7 +64,7 @@ public class CodManagementServiceTestRunner {
         // 3. Update CoD
         try {
             boolean result = service.updateCod(
-                    codUser,
+                    adminUser,
                     new Cod(testId, "Updated Service Coordinator", testEmail)
             );
 
@@ -82,7 +82,7 @@ public class CodManagementServiceTestRunner {
 
         // 4. Retrieve all CoDs
         try {
-            boolean result = service.getAllCods(codUser).stream()
+            boolean result = service.getAllCods(adminUser).stream()
                     .anyMatch(cod -> cod.getCodId().equals(testId));
 
             if (result) {
@@ -100,7 +100,7 @@ public class CodManagementServiceTestRunner {
         // 5. Reject invalid email
         try {
             service.addCod(
-                    codUser,
+                    adminUser,
                     new Cod(testId + "X", "Invalid Email Test", "invalid-email")
             );
 
@@ -126,7 +126,7 @@ public class CodManagementServiceTestRunner {
 
         // 7. Delete test record
         try {
-            boolean result = service.deleteCod(codUser, testId);
+            boolean result = service.deleteCod(adminUser, testId);
 
             if (result) {
                 System.out.println("DELETE CoD: PASSED");

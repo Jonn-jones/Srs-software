@@ -300,4 +300,50 @@ public class SystemAdminUserAccountService {
 
         return filteredAccounts;
     }
+    // =====================================================
+// 9. FILTER ACCOUNTS BY ROLE AND STATUS
+// =====================================================
+
+public List<UserAccount> getAccountsByRoleAndStatus(
+        UserAccount admin,
+        String role,
+        String status) {
+
+    if (!isAuthorized(admin)) {
+        throw new SecurityException("Access denied.");
+    }
+
+    if (role == null || role.trim().isEmpty()) {
+        throw new IllegalArgumentException(
+                "Role cannot be empty."
+        );
+    }
+
+    if (status == null
+            || (!status.equalsIgnoreCase("ACTIVE")
+            && !status.equalsIgnoreCase("INACTIVE"))) {
+
+        throw new IllegalArgumentException(
+                "Status must be ACTIVE or INACTIVE."
+        );
+    }
+
+    List<UserAccount> allAccounts =
+            userAccountDAO.getAllAccounts();
+
+    List<UserAccount> filteredAccounts = new ArrayList<>();
+
+    for (UserAccount account : allAccounts) {
+
+        if (role.trim().equalsIgnoreCase(account.getRole())
+                && status.equalsIgnoreCase(
+                        account.getAccountStatus())) {
+
+            account.setPasswordHash(null);
+            filteredAccounts.add(account);
+        }
+    }
+
+    return filteredAccounts;
+}
 }
